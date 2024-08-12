@@ -1,4 +1,5 @@
 from PIL import Image, ImageDraw
+import numpy as np
 
 # Load the images
 empty_image_path = '/Users/dolevsmac/Desktop/SciMuse project/horsepower project/horse ilus/empty.png'
