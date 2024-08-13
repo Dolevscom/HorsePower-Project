@@ -41,6 +41,7 @@ void setup()
 
 void loop()
 {
+  delay(100);
   // Serial.println("Scanning...");
   sensor.read();
   // Serial.print("range: ");
