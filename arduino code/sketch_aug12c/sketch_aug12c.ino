@@ -17,7 +17,7 @@ void setup()
   Serial.begin(115200);
   Wire.begin();
   Wire.setClock(400000); // use 400 kHz I2C
-
+  // Serial.println("\nI2C Scanner");
   sensor.setTimeout(500);
   if (!sensor.init())
   {
@@ -41,8 +41,8 @@ void setup()
 
 void loop()
 {
+  // Serial.println("Scanning...");
   sensor.read();
-
   // Serial.print("range: ");
   Serial.print(sensor.ranging_data.range_mm);
   // Serial.print("\tstatus: ");
@@ -51,6 +51,8 @@ void loop()
   // Serial.print(sensor.ranging_data.peak_signal_count_rate_MCPS);
   // Serial.print("\tambient: ");
   // Serial.print(sensor.ranging_data.ambient_count_rate_MCPS);
-
   Serial.println();
 }
+
+
+
