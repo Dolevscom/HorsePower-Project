@@ -10,6 +10,7 @@ import numpy as np
 from bidi.algorithm import get_display  
 import arabic_reshaper  # reshaping Hebrew text 
 import tkinter as tk
+
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
  
 ###### CONSTANTS ###### 
@@ -137,14 +138,14 @@ def infinite_data_generator(serial_connection):
  
                         last_hp = hp 
                         # print(f"Calculated Horsepower: {hp:.4f}")  # Debugging print 
-                        yield hp 
+                        yield [hp, time_diff, current_distance]
                     else: 
                         if is_try_active: 
                             is_try_active = False 
                             last_try_max_hp = highest_hp_in_try  # Save the max HP of the last try 
-                            yield 0  # Indicate the end of a try 
+                            yield [0,0,0]  # Indicate the end of a try 
                         else: 
-                            yield 0  # No significant change, yield 0 horsepower 
+                            yield [0,0,0]  # No significant change, yield 0 horsepower 
  
                 last_distance = current_distance 
                 last_time = current_time 
@@ -222,22 +223,24 @@ def setup_measuring_screen():
     ani_measuring = animation.FuncAnimation(fig, update_measuring_screen, frames=100, interval=200, blit=False)
     plt.draw()  # Redraw the figure
 
-
 def update_measuring_screen(frame):
     global min_hp_observed, max_hp_observed, last_hp, highest_hp_in_try, last_try_max_hp
 
-    # Retrieve the next horsepower value
-    hp = next(hp_data_generator)
+    # Retrieve the next horsepower value and related data
+    data = next(hp_data_generator)
+    hp = data[0]  # Horsepower value is the first element
+    time_diff = data[1]  # Time difference is the second element
+    current_distance = data[2]  # Distance is the third element
     watts = hp * 745.7  # Convert horsepower to watts
 
     if hp == 0:
         result_img = blend_images(0)  # Display zero horsepower image
-        hebrew_text = f'כח סוס: {hp:.4f}\nניסיון אחרון בוואט: {last_try_max_hp * 745.7:.4f}\nניסיון אחרון בכח סוס: {last_try_max_hp:.4f}\nמקסימום כח סוס: {max_hp_observed:.4f}'
+        hebrew_text = f'הרמתם {CURRENT_WEIGHT} ק"ג \n לגובה {current_distance} ס"מ \n תוך {time_diff} שניות \nההספק שהפקתם מגופכם הוא {last_try_max_hp * 745.7:.4f} \nשהם {last_try_max_hp} כח סוס'
     else:
         min_hp_observed = min(min_hp_observed, hp)
         max_hp_observed = max(max_hp_observed, hp)
         result_img = blend_images(hp)  # Update image with the new horsepower value
-        hebrew_text = f'כח סוס: {hp:.4f}\nניסיון אחרון בוואט: {last_try_max_hp * 745.7:.4f}\nניסיון אחרון בכח סוס: {last_try_max_hp:.4f}\nמקסימום כח סוס: {max_hp_observed:.4f}'
+        hebrew_text = f'הרמתם {CURRENT_WEIGHT} ק"ג \n לגובה {current_distance} ס"מ \n תוך {time_diff} שניות \nההספק שהפקתם מגופכם הוא {last_try_max_hp * 745.7:.4f} \nשהם {last_try_max_hp} כח סוס'
 
     # Update the Hebrew text dynamically
     reshaped_text = arabic_reshaper.reshape(hebrew_text)
@@ -248,6 +251,7 @@ def update_measuring_screen(frame):
     img_display.set_data(np.array(result_img))
 
     return [img_display, hp_text]
+
 
 # Initial animation for the opening screen 
 ani_opening = animation.FuncAnimation(fig, update_opening_screen, frames=len(gif_frames), interval=200, repeat=True) 
