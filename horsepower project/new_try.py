@@ -17,32 +17,25 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 # CURRENT_WEIGHT = 1.525   # Weight of the object in kg 
 # CURRENT_WEIGHT = 4.519  # Weight of the object in kg 
 CURRENT_WEIGHT = 6  # Weight of the object in kg 
- 
+STARTING_DISTNACE = 1160
+
 MIN_HP = 0 
 MAX_HP = 0.01 
 DISTANCE_CHANGE_THRESHOLD = 30 
-last_hp = 0  # Global variable to store the last horsepower value 
-is_try_active = False  # To track if a "try" is ongoing 
-highest_hp_in_try = 0  # To store the highest horsepower during a "try" 
-last_try_max_hp = 0  # To store the max horsepower of the last try 
-current_screen = 'opening' 
- 
-##### GLOBALS ###### 
- 
-# Set up the serial connection with the Arduino 
-try: 
-    serial_connection = serial.Serial('COM5', 115200, timeout=1) 
-except serial.SerialException as e: 
-    print(f"Error opening serial port: {e}") 
-min_hp_observed = float('inf') 
-max_hp_observed = float('-inf') 
-ani_measuring = None 
- 
-# Load the images (update paths for Windows) 
+WATTS_CONSTANT = 745.7 
+
+######################### ***SHOULD BE CHANGED BETWEEN DIFFERENT COMPUTERS*** #########################
+ARDUINO_PORT = 'COM5' 
+# Load local files 
 heading  = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\top.jpg'
 empty_image_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\empty1.jpg'
 full_image_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\full2.jpg'
-gif_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\opening.gif' 
+gif_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\opening.gif'
+font_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf'
+######################### ***Thats it*** ######################### 
+
+
+# loading assets
 center_img  = Image.open(heading).convert("RGBA") 
 empty_img = Image.open(empty_image_path).convert("RGBA") 
 full_img = Image.open(full_image_path).convert("RGBA") 
@@ -50,16 +43,33 @@ empty_img = empty_img.resize(full_img.size) # Ensure the images are the same siz
 gif_frames = [frame.copy() for frame in ImageSequence.Iterator(Image.open(gif_path))] 
 width, height = full_img.size 
 aspect_ratio = width / height 
- 
-
-# Fonts loading
-font_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf'
 custom_font = fm.FontProperties(fname=font_path)
+
+##### GLOBALS ###### 
+last_hp = 0  # Global variable to store the last horsepower value 
+is_try_active = False  # To track if a "try" is ongoing 
+highest_hp_in_try = 0  # To store the highest horsepower during a "try" 
+last_try_max_hp = 0  # To store the max horsepower of the last try 
+last_try_max_distance = 0  # To store the distance of the last try's max horsepower
+last_try_max_time_diff = 0  # To store the time difference of the last try's max horsepower
+current_screen = 'opening' 
+min_hp_observed = float('inf') 
+max_hp_observed = float('-inf') 
+ani_measuring = None 
+
+
+# Set up the serial connection with the Arduino 
+try: 
+    serial_connection = serial.Serial(ARDUINO_PORT, 115200, timeout=1) 
+except serial.SerialException as e: 
+    print(f"Error opening serial port: {e}") 
+
+
 ###### HELPER FUNCTIONS ###### 
  
 # Function to calculate horsepower from speed 
 def calculate_horsepower(speed_mps): 
-    return (CURRENT_WEIGHT * speed_mps) / 745.7 
+    return (CURRENT_WEIGHT * speed_mps) / WATTS_CONSTANT
  
 def blend_images(horsepower, min_hp=MIN_HP, max_hp=MAX_HP): 
     # Ensure horsepower is normalized between 0 and 1 
@@ -92,12 +102,14 @@ def blend_images(horsepower, min_hp=MIN_HP, max_hp=MAX_HP):
  
     return result_img 
  
-###### MAIN CODE ###### 
+###### MAIN CODE ######
  
 def infinite_data_generator(serial_connection): 
     last_distance = None 
     last_time = time.time() 
-    global last_hp, is_try_active, highest_hp_in_try, min_hp_observed, max_hp_observed, last_try_max_hp 
+    try_start_time = None  # Variable to track the start time of a try
+    global last_hp, is_try_active, highest_hp_in_try, min_hp_observed,\
+          max_hp_observed, last_try_max_hp, last_try_max_time_diff, last_try_max_distance
  
     print("Starting data generator...")  # Debugging print 
  
@@ -115,8 +127,6 @@ def infinite_data_generator(serial_connection):
                 for line in data_lines: 
                     try: 
                         current_distance = float(line.strip())  # Convert the line to a float 
-                        # Proceed with your calculations using current_distance 
-                        # Example: process_sensor_data(current_distance) 
                     except ValueError as e: 
                         # print(f"ValueError: {e} - Received invalid data: {line}") 
                         continue 
@@ -134,25 +144,34 @@ def infinite_data_generator(serial_connection):
                                 highest_hp_in_try = hp 
                         else: 
                             is_try_active = True  # Start a new try 
-                            highest_hp_in_try = hp  # Initialize with the current horsepower 
- 
+                            try_start_time = current_time  # Record the start time of the try
+                            highest_hp_in_try = hp  
+                            
                         last_hp = hp 
                         # print(f"Calculated Horsepower: {hp:.4f}")  # Debugging print 
-                        yield [hp, time_diff, current_distance]
+                        yield hp
                     else: 
                         if is_try_active: 
                             is_try_active = False 
-                            last_try_max_hp = highest_hp_in_try  # Save the max HP of the last try 
-                            yield [0,0,0]  # Indicate the end of a try 
+                            last_try_max_hp = highest_hp_in_try  # Save the max HP of the last try
+                            
+                            # Calculate the total duration of the try
+                            last_try_max_time_diff  = current_time - try_start_time if try_start_time else 0
+                            last_try_max_distance = abs(current_distance - last_distance)
+                            
+                            # Reset the start time after the try ends
+                            try_start_time = None
+                            
+                            yield 0  # Yield with the total duration of the try
                         else: 
-                            yield [0,0,0]  # No significant change, yield 0 horsepower 
+                            yield 0  # No significant change, yield 0 horsepower 
  
                 last_distance = current_distance 
                 last_time = current_time 
  
         except ValueError as e: 
             print(f"ValueError: {e}")  # Handle and print any conversion errors 
-            continue 
+            continue
  
 ##### PLOTTING ###### 
  
@@ -179,12 +198,12 @@ def on_click(event):
         setup_measuring_screen()
         plt.draw()  # Redraw the figure
 
-
 def update_opening_screen(frame): 
     ax.cla()  # Clear the axes
     ax.axis('off') 
     ax.imshow(gif_frames[frame % len(gif_frames)]) 
     return [ax] 
+
 def setup_measuring_screen():
     global img_display, hp_text, ani_measuring
 
@@ -203,7 +222,7 @@ def setup_measuring_screen():
     reshaped_text = arabic_reshaper.reshape(hebrew_text)
     bidi_text = get_display(reshaped_text)
     
-    hp_text = ax2.text(0.95, 0.55, bidi_text, ha='right', va='center', fontsize=45,
+    hp_text = ax2.text(0.95, 0.55, bidi_text, ha='right', va='center', fontsize=15,
                       fontproperties=custom_font, color='black', fontweight='bold',
                       transform=ax.transAxes, zorder=2,
                       bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
@@ -224,24 +243,25 @@ def setup_measuring_screen():
     plt.draw()  # Redraw the figure
 
 def update_measuring_screen(frame):
-    global min_hp_observed, max_hp_observed, last_hp, highest_hp_in_try, last_try_max_hp
+    global min_hp_observed, max_hp_observed, last_hp, last_try_max_hp, last_try_max_distance, last_try_max_time_diff
+
 
     # Retrieve the next horsepower value and related data
-    data = next(hp_data_generator)
-    hp = data[0]  # Horsepower value is the first element
-    time_diff = data[1]  # Time difference is the second element
-    current_distance = data[2]  # Distance is the third element
-    watts = hp * 745.7  # Convert horsepower to watts
+    hp = next(hp_data_generator)
+    distance_in_cm = (STARTING_DISTNACE - last_try_max_distance) / 100
 
     if hp == 0:
         result_img = blend_images(0)  # Display zero horsepower image
-        hebrew_text = f'הרמתם {CURRENT_WEIGHT} ק"ג \n לגובה {current_distance} ס"מ \n תוך {time_diff} שניות \nההספק שהפקתם מגופכם הוא {last_try_max_hp * 745.7:.4f} \nשהם {last_try_max_hp} כח סוס'
     else:
         min_hp_observed = min(min_hp_observed, hp)
         max_hp_observed = max(max_hp_observed, hp)
         result_img = blend_images(hp)  # Update image with the new horsepower value
-        hebrew_text = f'הרמתם {CURRENT_WEIGHT} ק"ג \n לגובה {current_distance} ס"מ \n תוך {time_diff} שניות \nההספק שהפקתם מגופכם הוא {last_try_max_hp * 745.7:.4f} \nשהם {last_try_max_hp} כח סוס'
 
+    hebrew_text = f'הרמתם {CURRENT_WEIGHT} ק"ג לגובה {distance_in_cm:.3f} ס"מ'\
+                    f'\nתוך {last_try_max_time_diff:.3f} שניות \n'\
+                        f'ההספק שהפקתם מגופכם הוא {(last_try_max_hp * WATTS_CONSTANT):.3f} וואט \n'\
+                            f'שהם {last_try_max_hp:.3f} כח סוס'
+    
     # Update the Hebrew text dynamically
     reshaped_text = arabic_reshaper.reshape(hebrew_text)
     bidi_text = get_display(reshaped_text)
