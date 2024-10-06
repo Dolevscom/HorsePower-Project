@@ -15,15 +15,28 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 ###### CONSTANTS ######
 CURRENT_WEIGHT = 7.5  # Weight of the object in kg
-STARTING_DISTNACE = 1920
+STARTING_DISTANCE = 1920
 WHOLE_POLE_LEN = 116
 
 MIN_HP = 0
-MAX_HP = 1
-DISTANCE_CHANGE_THRESHOLD = 30
+MAX_HP = 0.01
+DISTANCE_CHANGE_THRESHOLD = 10  # Lowered threshold for more sensitivity
 WATTS_CONSTANT = 745.7
 
 ######################### ***SHOULD BE CHANGED BETWEEN DIFFERENT COMPUTERS*** #########################
+# ARDUINO_PORT = 'COM5'
+# # Load local files
+# empty_image_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\Empty horse.jpg'
+# full_image_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\Full horse.jpg'
+# gif_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\opening.gif'
+
+# # Font paths for different languages (ensure fonts are available for all languages)
+# font_paths = {
+#     'hebrew': r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
+#     'english': r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
+#     'arabic': r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\fonts\NotoKufiArabic-SemiBold.ttf'  # Use a font that supports Arabic
+# }
+
 ARDUINO_PORT = 'COM4'
 # Load local files
 empty_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\Empty horse.jpg'
@@ -232,7 +245,7 @@ def setup_measuring_screen():
     fig.clear()
     gs = GridSpec(3, 1, height_ratios=[3, 1, 3])  # Define 3 rows with different height ratios
     
-    # Top section for the heading
+     # Top section for the heading
     ax1 = fig.add_subplot(gs[0])
     heading = heading_text[current_language]
     reshaped_heading = arabic_reshaper.reshape(heading) if current_language in ['arabic', 'hebrew'] else heading
@@ -249,6 +262,7 @@ def setup_measuring_screen():
                        color='black', fontweight='regular', transform=ax.transAxes, zorder=2,
                        bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
     ax2.axis('off')
+
 
     # Bottom section for the full/empty images
     ax3 = fig.add_subplot(gs[2])
