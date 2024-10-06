@@ -13,27 +13,27 @@ import tkinter as tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 ###### CONSTANTS ######
-CURRENT_WEIGHT = 6  # Weight of the object in kg
+CURRENT_WEIGHT = 7.5  # Weight of the object in kg
 STARTING_DISTNACE = 1920
 WHOLE_POLE_LEN = 116
 
 MIN_HP = 0
-MAX_HP = 0.01
+MAX_HP = 1
 DISTANCE_CHANGE_THRESHOLD = 30
 WATTS_CONSTANT = 745.7
 
 ######################### ***SHOULD BE CHANGED BETWEEN DIFFERENT COMPUTERS*** #########################
-ARDUINO_PORT = 'COM5'
+ARDUINO_PORT = 'COM4'
 # Load local files
-empty_image_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\Empty horse.jpg'
-full_image_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\Full horse.jpg'
-gif_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\opening.gif'
+empty_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\Empty horse.jpg'
+full_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\Full horse.jpg'
+gif_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\introduction gif.gif'
 
 # Font paths for different languages (ensure fonts are available for all languages)
 font_paths = {
-    'hebrew': r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
-    'english': r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
-    'arabic': r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\fonts\NotoKufiArabic-SemiBold.ttf'  # Use a font that supports Arabic
+    'hebrew': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
+    'english': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
+    'arabic': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\NotoKufiArabic-SemiBold.ttf'  # Use a font that supports Arabic
 }
 
 # Translation dictionary
@@ -212,16 +212,16 @@ def setup_measuring_screen():
     heading = heading_text[current_language]
     reshaped_heading = arabic_reshaper.reshape(heading) if current_language in ['arabic', 'hebrew'] else heading
     bidi_heading = get_display(reshaped_heading) if current_language in ['arabic', 'hebrew'] else reshaped_heading
-    ax1.text(0.5, 0.5, bidi_heading, ha='center', va='center', fontsize=35,
+    ax1.text(0.5, 0.75, bidi_heading, ha='center', va='center', fontsize=80,
              fontproperties=fm.FontProperties(fname=font_paths[current_language]),
              fontweight='bold', color='black')
     ax1.axis('off')
 
     # Middle section for the text
     ax2 = fig.add_subplot(gs[1])
-    hp_text = ax2.text(0.95, 0.55, '', ha='right', va='center', fontsize=15,
+    hp_text = ax2.text(0.95, 0.75, '', ha='right', va='center', fontsize=30,
                        fontproperties=fm.FontProperties(fname=font_paths[current_language]),
-                       color='black', fontweight='bold', transform=ax.transAxes, zorder=2,
+                       color='black', fontweight='regular', transform=ax.transAxes, zorder=2,
                        bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
     ax2.axis('off')
 
