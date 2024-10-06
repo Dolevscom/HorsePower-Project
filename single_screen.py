@@ -7,6 +7,7 @@ import matplotlib.image as mpimg
 from matplotlib.gridspec import GridSpec
 from PIL import Image, ImageDraw, ImageSequence
 import numpy as np
+from collections import deque  # For smoothing
 from bidi.algorithm import get_display
 import arabic_reshaper  # reshaping Hebrew text
 import tkinter as tk
@@ -14,12 +15,12 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 ###### CONSTANTS ######
 CURRENT_WEIGHT = 6  # Weight of the object in kg
-STARTING_DISTNACE = 1920
+STARTING_DISTANCE = 1920
 WHOLE_POLE_LEN = 116
 
 MIN_HP = 0
 MAX_HP = 0.01
-DISTANCE_CHANGE_THRESHOLD = 30
+DISTANCE_CHANGE_THRESHOLD = 10  # Lowered threshold for more sensitivity
 WATTS_CONSTANT = 745.7
 
 ######################### ***SHOULD BE CHANGED BETWEEN DIFFERENT COMPUTERS*** #########################
@@ -87,6 +88,7 @@ last_try_max_time_diff = 0  # To store the time difference of the last try's max
 min_hp_observed = float('inf')
 max_hp_observed = float('-inf')
 ani_measuring = None  # Keep animation object persistent
+distance_buffer = deque(maxlen=5)  # For smoothing the distance readings
 
 # Set up the serial connection with the Arduino
 try:
@@ -145,27 +147,46 @@ def infinite_data_generator(serial_connection):
     while True:
         if serial_connection and serial_connection.in_waiting > 0:  # Check if there's data to read
             raw_data = serial_connection.read(serial_connection.in_waiting).decode('utf-8').strip()
+            print(f"Raw data received from Arduino: {raw_data}")  # Debugging print
             data_lines = raw_data.splitlines()
             current_time = time.time()
+
             for line in data_lines:
                 try:
                     current_distance = float(line.strip())  # Convert the line to a float
-                except ValueError:
-                    continue
+                    distance_buffer.append(current_distance)  # Add to smoothing buffer
+                    smoothed_distance = sum(distance_buffer) / len(distance_buffer)  # Smoothed distance
+                    print(f"Parsed distance from Arduino: {smoothed_distance} mm")  # Debugging print
 
-                if last_distance is not None:
-                    time_diff = max(current_time - last_time, 0.001) if last_time else 1
-                    if abs(current_distance - last_distance) > DISTANCE_CHANGE_THRESHOLD:
-                        speed_mps = (abs(current_distance - last_distance) / 1000) / time_diff
+                    if last_distance is None:
+                        print("First distance reading received.")
+                        last_distance = smoothed_distance
+                        last_time = current_time
+                        continue
+
+                    time_diff = max(current_time - last_time, 0.001)
+                    print(f"Time difference: {time_diff} seconds")  # Debugging print
+
+                    # Skip if the time difference is too small (e.g., less than 0.05 seconds)
+                    if time_diff < 0.05:
+                        continue
+
+                    if abs(smoothed_distance - last_distance) > DISTANCE_CHANGE_THRESHOLD:
+                        speed_mps = (abs(smoothed_distance - last_distance) / 1000) / time_diff
+                        print(f"Speed: {speed_mps} m/s")  # Debugging print
+
                         hp = calculate_horsepower(speed_mps)
+                        print(f"Calculated horsepower: {hp}")  # Debugging print
 
                         if is_try_active:
                             if hp > highest_hp_in_try:
                                 highest_hp_in_try = hp
+                                print(f"New highest HP in this try: {highest_hp_in_try}")  # Debugging print
                         else:
                             is_try_active = True  # Start a new try
                             try_start_time = current_time  # Record the start time of the try
                             highest_hp_in_try = hp
+                            print("New try started")  # Debugging print
 
                         last_hp = hp
                         yield hp
@@ -174,12 +195,16 @@ def infinite_data_generator(serial_connection):
                             is_try_active = False
                             last_try_max_hp = highest_hp_in_try  # Save the max HP of the last try
                             last_try_max_time_diff = current_time - try_start_time if try_start_time else 0
-                            last_try_max_distance = abs(current_distance - last_distance)
+                            last_try_max_distance = abs(smoothed_distance - last_distance)
+                            print(f"Try ended. Max HP: {last_try_max_hp}, Max Distance: {last_try_max_distance}, Time diff: {last_try_max_time_diff}")  # Debugging print
                             try_start_time = None
                             yield 0
                         else:
                             yield 0
-                last_distance = current_distance
+                except ValueError:
+                    continue
+
+                last_distance = smoothed_distance
                 last_time = current_time
 
 ##### PLOTTING ######
@@ -243,9 +268,9 @@ def setup_measuring_screen():
 
 
 # Function to retrieve the correct text in the selected language
-def get_translated_text(language, weight, distance, time, watts, hp):
+def get_translated_text(language, weight, distance, time, watts, hp, last_distance):
     translation = translations.get(language, translations['hebrew'])
-    lifted_text = translation['lifted'].format(weight=weight, distance=distance)
+    lifted_text = translation['lifted'].format(weight=weight, distance=last_distance)  # Using last_distance
     time_text = translation['time'].format(time=time)
     power_text = translation['power'].format(watts=watts)
     horsepower_text = translation['horsepower'].format(hp=hp)
@@ -259,16 +284,19 @@ def update_measuring_screen(frame):
     else:
         hp = 0  # No serial data available, so default to 0 HP
 
-    current_distance = (STARTING_DISTNACE - last_try_max_distance) / 100
-    distance_in_cm = 0 if (current_distance <= ((STARTING_DISTNACE / 100) + 2)) else current_distance
+    # If there's no ongoing try, use the last try's max distance, otherwise use the current distance
+    current_distance = (STARTING_DISTANCE - last_try_max_distance) / 100
+    distance_in_cm = max(0, current_distance)
 
+    # Use the last try's max distance for the display, as requested
     translated_text = get_translated_text(
         current_language,  # This is the selected language
         weight=CURRENT_WEIGHT,
         distance=distance_in_cm,
         time=last_try_max_time_diff,
         watts=last_try_max_hp * WATTS_CONSTANT,
-        hp=last_try_max_hp
+        hp=last_try_max_hp,
+        last_distance=last_try_max_distance  # Display the last try's distance
     )
 
     reshaped_text = arabic_reshaper.reshape(translated_text) if current_language in ['arabic', 'hebrew'] else translated_text
@@ -279,6 +307,7 @@ def update_measuring_screen(frame):
     img_display.set_data(np.array(result_img))
 
     return [img_display, hp_text]
+
 
 setup_measuring_screen()
 
