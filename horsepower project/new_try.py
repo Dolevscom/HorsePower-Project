@@ -24,14 +24,15 @@ MAX_HP = 0.01
 DISTANCE_CHANGE_THRESHOLD = 30 
 WATTS_CONSTANT = 745.7 
 
+
 ######################### ***SHOULD BE CHANGED BETWEEN DIFFERENT COMPUTERS*** #########################
 ARDUINO_PORT = 'COM5' 
-# Load local files 
-heading  = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\top.jpg'
-empty_image_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\empty1.jpg'
-full_image_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\full2.jpg'
-gif_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\opening.gif'
-font_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf'
+# Load local files
+heading  = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\top.jpg'
+empty_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\empty1.jpg'
+full_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\full2.jpg'
+gif_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\opening.gif'
+font_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf'
 ######################### ***Thats it*** ######################### 
 
 
