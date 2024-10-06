@@ -281,4 +281,3 @@ fig.canvas.mpl_connect('button_press_event', on_click)
 print("Showing initial screen...")  # Debugging print 
 plt.show()
 
-
