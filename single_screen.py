@@ -102,6 +102,8 @@ min_hp_observed = float('inf')
 max_hp_observed = float('-inf')
 ani_measuring = None  # Keep animation object persistent
 distance_buffer = deque(maxlen=5)  # For smoothing the distance readings
+last_update_time = time.time()  # Global variable to store last update time
+update_interval = 0.2  # Update every 0.2 seconds to reduce frequency of updates
 
 # Set up the serial connection with the Arduino
 try:
@@ -313,7 +315,6 @@ def update_measuring_screen(frame):
     else:
         hp_text.set_ha('right')  # Align text to the right for Hebrew/Arabic
         hp_text.set_position((0.95, 0.55))  # Position for right alignment
-        
     # Blend the images based on the normalized horsepower
     result_img = blend_images(last_try_max_hp)  # last_try_max_hp is used for the visualization
     img_display.set_data(np.array(result_img))
