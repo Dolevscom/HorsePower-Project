@@ -55,8 +55,8 @@ translations = {
     'hebrew': {
         'lifted': 'הרמתם {weight} ק"ג לגובה {distance:.3f} ס"מ',
         'time': '\nתוך {time:.3f} שניות',
-        'power': '\nההספק שהפקתם מגופכם הוא {watts:.3f} וואט',
-        'horsepower': '\nשהם {hp:.3f} כח סוס'
+        'power': '\nההספק שהפקתם מגופכם הוא',
+        'horsepower': '\n {watts:.3f} וואט {hp:.3f} כח סוס'
     },
     'english': {
         'lifted': 'You lifted {weight} kg to a height of {distance:.3f} cm',
@@ -102,6 +102,8 @@ min_hp_observed = float('inf')
 max_hp_observed = float('-inf')
 ani_measuring = None  # Keep animation object persistent
 distance_buffer = deque(maxlen=5)  # For smoothing the distance readings
+last_update_time = time.time()  # Global variable to store last update time
+update_interval = 0.2  # Update every 0.2 seconds to reduce frequency of updates
 
 # Set up the serial connection with the Arduino
 try:
@@ -116,17 +118,9 @@ except (serial.SerialException, FileNotFoundError, PermissionError) as e:
 def calculate_horsepower(speed_mps):
     return (CURRENT_WEIGHT * speed_mps) / WATTS_CONSTANT
 
-def blend_images(horsepower, min_hp=MIN_HP, max_hp=MAX_HP):
-    # Ensure horsepower is normalized between 0 and 1
-    if min_hp == float('inf') or max_hp == float('-inf'):
-        normalized_hp = 0
-    elif min_hp == max_hp:
-        normalized_hp = 1 if horsepower >= max_hp else 0
-    else:
-        normalized_hp = (horsepower - min_hp) / (max_hp - min_hp)
-    
-    # Clip the value to be between 0 and 1
-    normalized_hp = np.clip(normalized_hp, 0, 1)
+def blend_images(horsepower, min_hp=0, max_hp=0.1):
+    # Ensure horsepower is normalized between 0 and 1, capping at 1 HP
+    normalized_hp = min(horsepower / max_hp, 1.0)  # Cap the horsepower to a max of 1
 
     # Create the mask for blending
     mask = Image.new("L", empty_img.size, 0)
@@ -136,9 +130,6 @@ def blend_images(horsepower, min_hp=MIN_HP, max_hp=MAX_HP):
     # Calculate the height to fill based on the normalized horsepower
     fill_height = int(normalized_hp * height)
 
-    # Ensure the entire image is filled when horsepower is at max
-    fill_height = max(1, fill_height)  # Avoid a 0 height
-
     # Draw the fill on the mask from the bottom up
     draw.rectangle([0, height - fill_height, width, height], fill=255)
 
@@ -146,6 +137,7 @@ def blend_images(horsepower, min_hp=MIN_HP, max_hp=MAX_HP):
     result_img = Image.composite(full_img, empty_img, mask)
 
     return result_img
+
 
 ###### MAIN CODE ######
 
@@ -155,12 +147,12 @@ def infinite_data_generator(serial_connection):
     try_start_time = None  # Variable to track the start time of a try
     global last_hp, is_try_active, highest_hp_in_try, min_hp_observed, max_hp_observed, last_try_max_hp, last_try_max_time_diff, last_try_max_distance
 
-    print("Starting data generator...")  # Debugging print
+    # print("Starting data generator...")  # Debugging print
 
     while True:
         if serial_connection and serial_connection.in_waiting > 0:  # Check if there's data to read
             raw_data = serial_connection.read(serial_connection.in_waiting).decode('utf-8').strip()
-            print(f"Raw data received from Arduino: {raw_data}")  # Debugging print
+            # print(f"Raw data received from Arduino: {raw_data}")  # Debugging print
             data_lines = raw_data.splitlines()
             current_time = time.time()
 
@@ -169,16 +161,16 @@ def infinite_data_generator(serial_connection):
                     current_distance = float(line.strip())  # Convert the line to a float
                     distance_buffer.append(current_distance)  # Add to smoothing buffer
                     smoothed_distance = sum(distance_buffer) / len(distance_buffer)  # Smoothed distance
-                    print(f"Parsed distance from Arduino: {smoothed_distance} mm")  # Debugging print
+                    # print(f"Parsed distance from Arduino: {smoothed_distance} mm")  # Debugging print
 
                     if last_distance is None:
-                        print("First distance reading received.")
+                        # print("First distance reading received.")
                         last_distance = smoothed_distance
                         last_time = current_time
                         continue
 
                     time_diff = max(current_time - last_time, 0.001)
-                    print(f"Time difference: {time_diff} seconds")  # Debugging print
+                    # print(f"Time difference: {time_diff} seconds")  # Debugging print
 
                     # Skip if the time difference is too small (e.g., less than 0.05 seconds)
                     if time_diff < 0.05:
@@ -186,15 +178,15 @@ def infinite_data_generator(serial_connection):
 
                     if abs(smoothed_distance - last_distance) > DISTANCE_CHANGE_THRESHOLD:
                         speed_mps = (abs(smoothed_distance - last_distance) / 1000) / time_diff
-                        print(f"Speed: {speed_mps} m/s")  # Debugging print
+                        # print(f"Speed: {speed_mps} m/s")  # Debugging print
 
                         hp = calculate_horsepower(speed_mps)
-                        print(f"Calculated horsepower: {hp}")  # Debugging print
+                        # print(f"Calculated horsepower: {hp}")  # Debugging print
 
                         if is_try_active:
                             if hp > highest_hp_in_try:
                                 highest_hp_in_try = hp
-                                print(f"New highest HP in this try: {highest_hp_in_try}")  # Debugging print
+                                # print(f"New highest HP in this try: {highest_hp_in_try}")  # Debugging print
                         else:
                             is_try_active = True  # Start a new try
                             try_start_time = current_time  # Record the start time of the try
@@ -298,11 +290,10 @@ def update_measuring_screen(frame):
     else:
         hp = 0  # No serial data available, so default to 0 HP
 
-    # If there's no ongoing try, use the last try's max distance, otherwise use the current distance
+    # Use the last try's max HP for the display, as requested
     current_distance = (STARTING_DISTANCE - last_try_max_distance) / 100
     distance_in_cm = max(0, current_distance)
 
-    # Use the last try's max distance for the display, as requested
     translated_text = get_translated_text(
         current_language,  # This is the selected language
         weight=CURRENT_WEIGHT,
@@ -316,8 +307,16 @@ def update_measuring_screen(frame):
     reshaped_text = arabic_reshaper.reshape(translated_text) if current_language in ['arabic', 'hebrew'] else translated_text
     bidi_text = get_display(reshaped_text) if current_language in ['arabic', 'hebrew'] else reshaped_text
     hp_text.set_text(bidi_text)
-
-    result_img = blend_images(hp if hp != 0 else 0)
+    
+    # Set alignment based on the language
+    if current_language == 'english':
+        hp_text.set_ha('left')  # Align text to the left for English
+        hp_text.set_position((0.05, 0.55))  # Position for left alignment
+    else:
+        hp_text.set_ha('right')  # Align text to the right for Hebrew/Arabic
+        hp_text.set_position((0.95, 0.55))  # Position for right alignment
+    # Blend the images based on the normalized horsepower
+    result_img = blend_images(last_try_max_hp)  # last_try_max_hp is used for the visualization
     img_display.set_data(np.array(result_img))
 
     return [img_display, hp_text]
