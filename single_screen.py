@@ -14,23 +14,24 @@ import arabic_reshaper  # reshaping Hebrew text
 import sys
 import atexit
 import logging
-import traceback
+
+# Set up Matplotlib to use TkAgg backend for compatibility with screen updates
 matplotlib.use("TkAgg")
 
 
 ###### CONSTANTS ######
 
 
-CURRENT_WEIGHT = 7.5  # Weight of the object in kg
-STARTING_DISTANCE = 1870
-WHOLE_POLE_LEN = 116
-MIN_HP = 0
-MAX_HP = 1
-DISTANCE_CHANGE_THRESHOLD = 10  # Lowered threshold for more sensitivity
-WATTS_CONSTANT = 745.7
-WEIGHT_TO_FORCE_CONST = 9.81 
-METER_TO_FEET_CONST = 3.28084 
-SECONDS_TO_MINUTE = 60
+CURRENT_WEIGHT = 7.5  # Object weight in kg
+STARTING_DISTANCE = 1870  # Starting distance for calculations in mm
+WHOLE_POLE_LEN = 116  # Length of the pole for horsepower calculation
+MIN_HP = 0  # Minimum horsepower threshold
+MAX_HP = 1  # Maximum horsepower threshold
+DISTANCE_CHANGE_THRESHOLD = 10  # Threshold to detect significant distance changes
+WATTS_CONSTANT = 745.7  # Constant for horsepower to watts conversion
+WEIGHT_TO_FORCE_CONST = 9.81  # Gravity constant to convert weight to force
+METER_TO_FEET_CONST = 3.28084  # Conversion constant from meters to feet
+SECONDS_TO_MINUTE = 60  # Conversion from seconds to minutes
 
 ######################### ***SHOULD BE CHANGED BETWEEN DIFFERENT COMPUTERS*** #########################
  
@@ -117,7 +118,7 @@ width, height = full_img.size
 aspect_ratio = width / height
 
 
-######################### GLOBALS #########################
+###### GLOBAL VARIABLES ######
 
 
 
@@ -140,7 +141,7 @@ is_rising = True
 
 
 
-######################### I/O #########################
+###### SERIAL CONNECTION ######
 
 # Set up the serial connection with the Arduino
 try:
@@ -150,7 +151,10 @@ except (serial.SerialException, FileNotFoundError, PermissionError) as e:
     serial_connection = None  # Set to None if serial connection fails
 
 
+###### HELPER FUNCTIONS ######
+
 def get_secondary_monitor():
+    """Identify and return the secondary monitor for display if available, otherwise return primary."""
     monitors = get_monitors()
     if len(monitors) > 1:
         print(f"Secondary monitor detected: {monitors[1]}")
@@ -160,14 +164,9 @@ def get_secondary_monitor():
         return monitors[0]  # Falls back to the primary monitor if no secondary detected
 
 
-######################### HELPER FUNCTIONS #########################
-
-
-# # Function to calculate horsepower from speed
-# def calculate_horsepower(speed_mps):
-#     return (CURRENT_WEIGHT * speed_mps) / WATTS_CONSTANT
 
 def calculate_horsepower(distance_meters, time_seconds):
+    """Calculate horsepower based on distance and time."""
     # Convert weight to force in Newtons (N)
     F = CURRENT_WEIGHT * 9.81  # Force in Newtons
     # Calculate horsepower in metric units and convert to horsepower
@@ -234,9 +233,13 @@ def blend_images(horsepower, min_hp=0, max_hp=1, rise_smoothing=0.5, fall_smooth
 
 
 
-###### MAIN CODE ######
+###### MAIN CODE AND DATA GENERATION ######
 
 def infinite_data_generator(serial_connection):
+    """
+    Generator to read data from Arduino and calculate horsepower.
+    Handles 'try' events and updates horsepower values based on distance changes.
+    """
     last_distance = None
     last_time = time.time()
     try_start_time = None  # Variable to track the start time of a try
@@ -325,6 +328,7 @@ def infinite_data_generator(serial_connection):
 ##### PLOTTING ######
 
 def open_on_secondary_monitor():
+    """Display figure on the secondary monitor if available."""
     secondary_monitor = get_secondary_monitor()
     fig, ax = plt.subplots(figsize=(8, 8 / (secondary_monitor.width / secondary_monitor.height)))
     ax.axis('off')
@@ -345,16 +349,10 @@ def open_on_secondary_monitor():
     
     return fig, ax
 
-# initiallize the data generator
+# Initialize data generator
 hp_data_generator = infinite_data_generator(serial_connection) if serial_connection else None
 fig, ax = open_on_secondary_monitor()
 img_display = ax.imshow(np.zeros((height, width, 4), dtype=np.uint8))
-
-# hp_text = ax.text(0.5, 0.9, '', ha='center', va='center', fontsize=30,
-#                   fontweight='bold', color='black',
-#                   bbox=dict(facecolor='lightgray',
-#                             edgecolor='black', boxstyle='round,pad=0.5'))
-# fig.patch.set_visible(False)
 
 
 
@@ -363,8 +361,8 @@ img_display = ax.imshow(np.zeros((height, width, 4), dtype=np.uint8))
 
 
 
-
 def setup_measuring_screen():
+    """Initialize the layout for the measuring screen with sections for heading, text, and image."""
     global img_display, hp_text, ani_measuring  # Make ani_measuring global
     fig.clear()
     gs = GridSpec(3, 1, height_ratios=[3, 1, 3])  # Define 3 rows with different height ratios
@@ -411,6 +409,23 @@ def setup_measuring_screen():
     plt.draw()  # Redraw the figure
 
 
+###### EVENT HANDLING AND DISPLAY UPDATE ######
+
+# Function to change language based on spacebar press
+def change_language_on_key(event):
+    """Change display language when spacebar is pressed."""
+    global current_language, current_language_index
+   
+    if event.key == ' ':
+        current_language_index = (current_language_index + 1) % len(languages)
+        current_language = languages[current_language_index]
+        # print(f"Language switched to: {current_language}")
+       
+        setup_measuring_screen()  # Reload screen with the new language and heading
+        plt.draw()  # Redraw the figure
+
+
+fig.canvas.mpl_connect('key_press_event', change_language_on_key)
 
 
 def get_translated_text(language, weight, distance, time, watts, hp):
@@ -421,9 +436,8 @@ def get_translated_text(language, weight, distance, time, watts, hp):
     return lifted_text + time_text + power_text
 
 
-
-
 def reset_display():
+    """Reset display variables and reinitialize the screen layout."""
     global last_hp, last_try_max_hp, last_try_max_distance, last_try_max_time_diff, is_try_active
     print("Resetting display after 30 seconds")
     last_hp = 0
@@ -434,8 +448,8 @@ def reset_display():
     setup_measuring_screen()
 
 
-
 def update_measuring_screen(frame):
+    """Update the display for each frame in the animation based on current horsepower."""
     global last_try_max_hp, last_try_max_distance, last_try_max_time_diff,\
           last_update_time, start_time, last_try_end_time
 
@@ -510,28 +524,8 @@ def update_measuring_screen(frame):
     return [img_display, hp_text]
 
 
-# setup_measuring_screen()
 
-# Function to change language based on spacebar press
-def change_language_on_key(event):
-    global current_language, current_language_index
-   
-    if event.key == ' ':
-        current_language_index = (current_language_index + 1) % len(languages)
-        current_language = languages[current_language_index]
-        # print(f"Language switched to: {current_language}")
-       
-        setup_measuring_screen()  # Reload screen with the new language and heading
-        plt.draw()  # Redraw the figure
-
-
-fig.canvas.mpl_connect('key_press_event', change_language_on_key)
-
-
-# Start the main loop
-# plt.get_current_fig_managr().full_screen_toggle()
-# plt.show()
-
+###### SETUP EXIT HANDLERS AND LOGGING ######
 
 # Ensure serial connection is closed on exit
 def close_serial_connection():
@@ -568,6 +562,9 @@ def log_exception(exc_type, exc_value, exc_traceback):
 
 # Set the custom exception hook
 sys.excepthook = log_exception
+
+
+###### MAIN FUNCTION ######
 
 # Main function or main code
 def main():

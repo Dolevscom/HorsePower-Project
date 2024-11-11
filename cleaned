@@ -1,0 +1,213 @@
+import serial
+import time
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib import font_manager as fm
+from matplotlib.gridspec import GridSpec
+from PIL import Image, ImageDraw, ImageSequence
+import numpy as np
+from screeninfo import get_monitors
+from collections import deque
+from bidi.algorithm import get_display
+import arabic_reshaper
+import sys
+import atexit
+import logging
+
+###### CONSTANTS ######
+CURRENT_WEIGHT = 7.5  # Weight in kg
+STARTING_DISTANCE = 1870  # Initial distance in mm
+WHOLE_POLE_LEN = 116
+MIN_HP = 0
+MAX_HP = 1
+DISTANCE_CHANGE_THRESHOLD = 10  # Distance threshold in mm
+WATTS_CONSTANT = 745.7  # Conversion constant
+WEIGHT_TO_FORCE_CONST = 9.81  # Gravity force constant
+METER_TO_FEET_CONST = 3.28084  # Conversion constant
+SECONDS_TO_MINUTE = 60
+
+######################### CONFIGURATION #########################
+
+# Arduino port and asset paths (Adjust for your system)
+ARDUINO_PORT = 'COM5'
+empty_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\Empty horse.jpg'
+full_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\Full horse.jpg'
+gif_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\introduction gif.gif'
+font_paths = {
+    'hebrew': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
+    'english': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
+    'arabic': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\NotoKufiArabic-SemiBold.ttf'
+}
+
+######################### LANGUAGE SETTINGS #########################
+
+# Translations for displaying results in different languages
+translations = {
+    'hebrew': {'lifted': 'הרמתם {weight} ק"ג לגובה {distance:.1f} ס"מ', 'time': '\nתוך {time:.1f} שניות',
+               'power': '\nההספק שהפקתם מגופכם הוא\n{watts:.1f} וואט = {hp:.1f} כח סוס'},
+    'english': {'lifted': 'You lifted {weight} kg to a height of {distance:.1f} cm', 'time': '\nIt took {time:.1f} seconds',
+                'power': '\nThe power you produced is\n{watts:.1f} watts = {hp:.1f} horsepower'},
+    'arabic': {'lifted': 'رفعت {weight} كغم إلى ارتفاع {distance:.1f} سم', 'time': '\nاستغرقت {time:.1f} ثانية',
+               'power': '\nالطاقة التي انتجتها هي\n{watts:.1f} واط = {hp:.1f} حصان'}
+}
+heading_text = {'hebrew': 'כח סוס', 'english': 'Horsepower', 'arabic': 'نتائج قوة الحصان'}
+languages = ['hebrew', 'english', 'arabic']
+current_language_index = 0
+current_language = languages[current_language_index]
+
+# Load images and fonts
+empty_img = Image.open(empty_image_path).convert("RGBA")
+full_img = Image.open(full_image_path).convert("RGBA")
+empty_img = empty_img.resize(full_img.size)  # Ensure matching sizes
+gif_frames = [frame.copy() for frame in ImageSequence.Iterator(Image.open(gif_path))]
+width, height = full_img.size
+aspect_ratio = width / height
+
+
+######################### VARIABLES #########################
+last_hp = 0
+is_try_active = False
+highest_hp_in_try = 0
+last_try_max_hp = 0
+last_try_max_distance = 0
+last_try_max_time_diff = 0
+ani_measuring = None
+distance_buffer = deque(maxlen=5)
+last_update_time = time.time()
+update_interval = 0.2
+start_time = None
+reset_duration = 15
+last_try_end_time = None
+current_fill_height = 0
+last_rise_time = time.time()
+is_rising = True
+# Initialize global variables for figure and axes
+fig, ax = None, None
+
+######################### SERIAL CONNECTION #########################
+try:
+    serial_connection = serial.Serial(ARDUINO_PORT, 115200, timeout=1)
+except (serial.SerialException, FileNotFoundError, PermissionError) as e:
+    print(f"Error opening serial port: {e}")
+    serial_connection = None
+
+######################### FUNCTIONS #########################
+
+def calculate_horsepower(distance_meters, time_seconds):
+    """Calculate horsepower from distance and time."""
+    F = CURRENT_WEIGHT * WEIGHT_TO_FORCE_CONST  # Force in Newtons
+    hp = (F * distance_meters) / (time_seconds * WATTS_CONSTANT) if time_seconds != 0 else 0
+    return hp
+
+def blend_images(horsepower, min_hp=0, max_hp=1, rise_smoothing=0.5, fall_smoothing=0.5, hold_time=0.1):
+    """Blend empty and full images with a filling effect based on horsepower."""
+    global current_fill_height, last_rise_time, is_rising
+    normalized_hp = max(0, min(1, (horsepower - min_hp) / (max_hp - min_hp)))
+    target_fill_height = int(normalized_hp * height)
+    
+    # Control the fill rising and falling
+    if is_rising:
+        current_fill_height += (target_fill_height - current_fill_height) * rise_smoothing
+        if current_fill_height >= target_fill_height:
+            last_rise_time = time.time()
+            is_rising = False
+    elif time.time() - last_rise_time > hold_time:
+        current_fill_height -= current_fill_height * fall_smoothing
+
+    fill_height = max(1, min(height, int(current_fill_height)))
+    mask = Image.new("L", empty_img.size, 0)
+    ImageDraw.Draw(mask).rectangle([0, height - fill_height, width, height], fill=255)
+    result_img = Image.composite(full_img, empty_img, mask)
+
+    if horsepower <= min_hp:
+        is_rising = True
+
+    return result_img
+
+def open_on_secondary_monitor():
+    """Try to open the plot window on a secondary monitor, fallback to default if unavailable."""
+    try:
+        monitors = get_monitors()
+        monitor = monitors[1] if len(monitors) > 1 else monitors[0]
+        fig, ax = plt.subplots(figsize=(8, 8 / (monitor.width / monitor.height)))
+        ax.axis('off')
+        manager = plt.get_current_fig_manager()
+        manager.window.wm_geometry(f"+{monitor.x}+{monitor.y}")
+        manager.resize(monitor.width, monitor.height)
+        return fig, ax
+    except Exception as e:
+        print("Error with monitor setup, using default screen configuration:", e)
+        # Fallback setup
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.axis('off')
+        return fig, ax
+    
+
+def setup_measuring_screen():
+    """Set up the measuring screen layout with headings, images, and text."""
+    global img_display, hp_text, ani_measuring
+    fig.clear()
+    gs = GridSpec(3, 1, height_ratios=[3, 1, 3])
+    
+    # Top Section - Heading
+    ax1 = fig.add_subplot(gs[0])
+    heading = heading_text[current_language]
+    reshaped_heading = arabic_reshaper.reshape(heading) if current_language in ['arabic', 'hebrew'] else heading
+    bidi_heading = get_display(reshaped_heading)
+    ax1.text(0.5, 0.5, bidi_heading, ha='center', va='center', fontsize=80,
+             fontproperties=fm.FontProperties(fname=font_paths[current_language]), fontweight='bold', color='black')
+    ax1.axis('off')
+
+    # Text Section
+    ax2 = fig.add_subplot(gs[1])
+    hp_text = ax2.text(0.95, 0.95, '', ha='right', va='center', fontsize=30,
+                       fontproperties=fm.FontProperties(fname=font_paths[current_language]), color='black')
+    ax2.axis('off')
+
+    # Image Section
+    ax3 = fig.add_subplot(gs[2])
+    img_display = ax3.imshow(np.zeros((height, width, 4), dtype=np.uint8))
+    ax3.axis('off')
+
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0, hspace=0, wspace=0)
+    fig.patch.set_visible(False)
+
+    if ani_measuring is None:
+        ani_measuring = animation.FuncAnimation(fig, update_measuring_screen, frames=100, interval=200, blit=False)
+    plt.draw()
+
+def change_language_on_key(event):
+    """Change the displayed language when the space key is pressed."""
+    global current_language, current_language_index
+    if event.key == ' ':
+        current_language_index = (current_language_index + 1) % len(languages)
+        current_language = languages[current_language_index]
+        setup_measuring_screen()
+        plt.draw()
+
+def close_serial_connection():
+    """Close the serial connection on exit."""
+    if serial_connection and serial_connection.is_open:
+        serial_connection.close()
+    print("Serial connection closed.")
+
+atexit.register(close_serial_connection)
+fig.canvas.mpl_connect('key_press_event', change_language_on_key)
+
+######################### MAIN EXECUTION #########################
+
+def main():
+    """Main function to initialize the measuring screen and start the animation loop."""
+    global fig, ax
+    fig, ax = open_on_secondary_monitor()  # Set up the figure on the secondary monitor or fallback
+
+    # Check that fig is successfully created before proceeding
+    if fig is not None:
+        setup_measuring_screen()  # Set up the initial screen
+        fig.canvas.mpl_connect('key_press_event', change_language_on_key)  # Connect the key press event
+        plt.show()  # Display the plot window and enter the main loop
+    else:
+        print("Figure creation failed. Please check display configuration.")
+
+if __name__ == "__main__":
+    main()  # Run the main function when the script is executed
