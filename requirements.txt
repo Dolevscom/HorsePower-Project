@@ -1,0 +1,7 @@
+pyserial
+matplotlib
+pillow
+numpy
+screeninfo
+python-bidi
+arabic-reshaper
