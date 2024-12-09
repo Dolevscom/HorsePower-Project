@@ -27,7 +27,7 @@ STARTING_DISTANCE = 1870  # Starting distance for calculations in mm
 WHOLE_POLE_LEN = 116  # Length of the pole for horsepower calculation
 MIN_HP = 0  # Minimum horsepower threshold
 MAX_HP = 1  # Maximum horsepower threshold
-DISTANCE_CHANGE_THRESHOLD = 10  # Threshold to detect significant distance changes
+DISTANCE_CHANGE_THRESHOLD = 100  # Threshold to detect significant distance changes
 WATTS_CONSTANT = 745.7  # Constant for horsepower to watts conversion
 WEIGHT_TO_FORCE_CONST = 9.81  # Gravity constant to convert weight to force
 METER_TO_FEET_CONST = 3.28084  # Conversion constant from meters to feet
@@ -53,23 +53,43 @@ SECONDS_TO_MINUTE = 60  # Conversion from seconds to minutes
 # }   
 
 
+# ####### [computer in the workshop] ########
+
+# ARDUINO_PORT = 'COM5'
+# # Load local files
+# # empty_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\empty_horse_bar.jpg'
+# # full_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\full_horse_bar.jpg'
+
+# empty_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\Empty horse.jpg'
+# full_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\Full horse.jpg'
+# gif_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\introduction gif.gif'
+
+# # Font paths for different languages (ensure fonts are available for all languages)
+# font_paths = {
+#     'hebrew': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
+#     'english': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
+#     'arabic': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\NotoKufiArabic-SemiBold.ttf'  # Use a font that supports Arabic
+# }
+
+
 ####### [computer in the workshop] ########
 
-ARDUINO_PORT = 'COM5'
+ARDUINO_PORT = '/dev/ttyUSB0'
 # Load local files
 # empty_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\empty_horse_bar.jpg'
 # full_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\full_horse_bar.jpg'
 
-empty_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\Empty horse.jpg'
-full_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\Full horse.jpg'
-gif_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\introduction gif.gif'
+empty_image_path = r'/home/mada/Desktop/HorsePower-Project/horsepower project/assets/Empty horse.jpg'
+full_image_path = r'/home/mada/Desktop/HorsePower-Project/horsepower project/assets/Full horse.jpg'
+# gif_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\introduction gif.gif'
 
 # Font paths for different languages (ensure fonts are available for all languages)
 font_paths = {
-    'hebrew': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
-    'english': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
-    'arabic': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\NotoKufiArabic-SemiBold.ttf'  # Use a font that supports Arabic
+    'hebrew': r'/home/mada/Desktop/HorsePower-Project/horsepower project/assets/fonts/SimplerPro_HLAR-Semibold.otf',
+    'english': r'/home/mada/Desktop/HorsePower-Project/horsepower project/assets/fonts/SimplerPro_HLAR-Semibold.otf',
+    'arabic': r'/home/mada/Desktop/HorsePower-Project/horsepower project/assets/fonts/NotoKufiArabic-SemiBold.ttf'  # Use a font that supports Arabic
 }
+
 
 
 
@@ -113,7 +133,7 @@ current_language = languages[current_language_index]  # Initial language is Hebr
 empty_img = Image.open(empty_image_path).convert("RGBA")
 full_img = Image.open(full_image_path).convert("RGBA")
 empty_img = empty_img.resize(full_img.size)  # Ensure the images are the same size
-gif_frames = [frame.copy() for frame in ImageSequence.Iterator(Image.open(gif_path))]
+# gif_frames = [frame.copy() for frame in ImageSequence.Iterator(Image.open(gif_path))]
 width, height = full_img.size
 aspect_ratio = width / height
 
@@ -327,33 +347,32 @@ def infinite_data_generator(serial_connection):
 
 ##### PLOTTING ######
 
-def open_on_secondary_monitor():
-    """Display figure on the secondary monitor if available."""
-    secondary_monitor = get_secondary_monitor()
-    fig, ax = plt.subplots(figsize=(8, 8 / (secondary_monitor.width / secondary_monitor.height)))
-    ax.axis('off')
-    
-    # Move the figure to the second screen and make it full screen
+def open_full_screen():
+    """Display figure in full screen on Linux."""
+    fig, ax = plt.subplots(figsize=(8, 8))  # Create a figure and axis
+    ax.axis('off')  # Turn off axis
+
+    # Move the figure to full screen
     backend = plt.get_backend()
     mng = plt.get_current_fig_manager()
 
     if backend == 'TkAgg':
-        print(f"Using TkAgg backend. Setting geometry to secondary monitor at coordinates ({secondary_monitor.x}, {secondary_monitor.y})")
-        mng.window.wm_geometry(f"+{secondary_monitor.x}+{secondary_monitor.y}")
-        mng.resize(secondary_monitor.width, secondary_monitor.height)
+        print("Using TkAgg backend for full screen on Linux.")
+        mng.window.attributes('-fullscreen', True)  # TkAgg: Make full screen
     elif backend in ['Qt5Agg', 'QtAgg']:
-        print(f"Using Qt5Agg or QtAgg backend. Setting geometry to secondary monitor at coordinates ({secondary_monitor.x}, {secondary_monitor.y})")
-        mng.window.setGeometry(secondary_monitor.x, secondary_monitor.y, secondary_monitor.width, secondary_monitor.height)
+        print("Using QtAgg backend for full screen on Linux.")
+        mng.window.showFullScreen()  # QtAgg: Full-screen display
     else:
-        print(f"Using unsupported backend: {backend}. The window may not display on the secondary monitor.")
-    
+        print(f"Using unsupported backend: {backend}. Full screen may not work.")
+
     return fig, ax
+
 
 # Initialize data generator
 hp_data_generator = infinite_data_generator(serial_connection) if serial_connection else None
-fig, ax = open_on_secondary_monitor()
+fig, ax = open_full_screen()
 img_display = ax.imshow(np.zeros((height, width, 4), dtype=np.uint8))
-
+fig.canvas.manager.toolbar.pack_forget()
 
 
 
@@ -527,6 +546,16 @@ def update_measuring_screen(frame):
 
 ###### SETUP EXIT HANDLERS AND LOGGING ######
 
+def close_on_esc(event):
+    """Close the application when the ESC key is pressed."""
+    if event.key == 'escape':  # Check if the ESC key is pressed
+        close_serial_connection()  # Close the serial connection
+        plt.close('all')  # Close all matplotlib figures
+        sys.exit(0)  # Exit the program
+
+# Connect the function to the key press event
+fig.canvas.mpl_connect('key_press_event', close_on_esc)
+
 # Ensure serial connection is closed on exit
 def close_serial_connection():
     if serial_connection and serial_connection.is_open:
@@ -583,3 +612,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+    print(matplotlib.get_backend())
+
