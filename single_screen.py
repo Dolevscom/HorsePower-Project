@@ -32,65 +32,22 @@ WATTS_CONSTANT = 745.7  # Constant for horsepower to watts conversion
 WEIGHT_TO_FORCE_CONST = 9.81  # Gravity constant to convert weight to force
 METER_TO_FEET_CONST = 3.28084  # Conversion constant from meters to feet
 SECONDS_TO_MINUTE = 60  # Conversion from seconds to minutes
+INITIAL_STAGE = 600
 
-######################### ***SHOULD BE CHANGED BETWEEN DIFFERENT COMPUTERS*** #########################
- 
-####### [computer upstairs] ########
-
-
-# ARDUINO_PORT = 'COM5'
-# # Load local files
-# empty_image_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\Empty horse.jpg'
-# full_image_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\Full horse.jpg'
-# gif_path = r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\opening.gif'
-
-
-# # Font paths for different languages (ensure fonts are available for all languages)
-# font_paths = {
-#     'hebrew': r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
-#     'english': r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
-#     'arabic': r'C:\Users\Motorola\Desktop\HP project\HorsePower-Project\horsepower project\assets\fonts\NotoKufiArabic-SemiBold.ttf'  # Use a font that supports Arabic
-# }   
-
-
-# ####### [computer in the workshop] ########
-
-# ARDUINO_PORT = 'COM5'
-# # Load local files
-# # empty_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\empty_horse_bar.jpg'
-# # full_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\full_horse_bar.jpg'
-
-# empty_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\Empty horse.jpg'
-# full_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\Full horse.jpg'
-# gif_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\introduction gif.gif'
-
-# # Font paths for different languages (ensure fonts are available for all languages)
-# font_paths = {
-#     'hebrew': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
-#     'english': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\SimplerPro_HLAR-Semibold.otf',
-#     'arabic': r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\fonts\NotoKufiArabic-SemiBold.ttf'  # Use a font that supports Arabic
-# }
-
-
-####### [computer in the workshop] ########
+####### [computer in the display] ########
 
 ARDUINO_PORT = '/dev/ttyUSB0'
-# Load local files
-# empty_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\empty_horse_bar.jpg'
-# full_image_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\assets\full_horse_bar.jpg'
 
+# Load local files
 empty_image_path = r'/home/mada/Desktop/HorsePower-Project/horsepower project/assets/Empty horse.jpg'
 full_image_path = r'/home/mada/Desktop/HorsePower-Project/horsepower project/assets/Full horse.jpg'
-# gif_path = r'C:\Users\MakeMada\Desktop\HP project\horsepower project\introduction gif.gif'
 
-# Font paths for different languages (ensure fonts are available for all languages)
+# Font paths for different languages
 font_paths = {
     'hebrew': r'/home/mada/Desktop/HorsePower-Project/horsepower project/assets/fonts/SimplerPro_HLAR-Semibold.otf',
     'english': r'/home/mada/Desktop/HorsePower-Project/horsepower project/assets/fonts/SimplerPro_HLAR-Semibold.otf',
     'arabic': r'/home/mada/Desktop/HorsePower-Project/horsepower project/assets/fonts/NotoKufiArabic-SemiBold.ttf'  # Use a font that supports Arabic
 }
-
-
 
 
 
@@ -120,6 +77,13 @@ heading_text = {
     'hebrew': 'כח סוס',
     'english': 'Horsepower',
     'arabic': 'نتائج قوة الحصان'
+}
+
+
+secondary_headline_text = {
+    'hebrew': 'הרימו את המשקולת במהירות האפשרית',
+    'english': 'Lift the weight as fast as possible',
+    'arabic': 'ارفع الوزن بأسرع ما يمكن'
 }
 
 
@@ -167,22 +131,11 @@ is_rising = True
 try:
     serial_connection = serial.Serial(ARDUINO_PORT, 115200, timeout=1)
 except (serial.SerialException, FileNotFoundError, PermissionError) as e:
-    print(f"Error opening serial port: {e}")
+    logging.error(f"Error opening serial port: {e}")
     serial_connection = None  # Set to None if serial connection fails
 
 
 ###### HELPER FUNCTIONS ######
-
-def get_secondary_monitor():
-    """Identify and return the secondary monitor for display if available, otherwise return primary."""
-    monitors = get_monitors()
-    if len(monitors) > 1:
-        print(f"Secondary monitor detected: {monitors[1]}")
-        return monitors[1]
-    else:
-        print(f"Only one monitor detected, using primary: {monitors[0]}")
-        return monitors[0]  # Falls back to the primary monitor if no secondary detected
-
 
 
 def calculate_horsepower(distance_meters, time_seconds):
@@ -280,72 +233,86 @@ def infinite_data_generator(serial_connection):
                     # Switch language and update the display
                     current_language_index = (current_language_index + 1) % len(languages)
                     current_language = languages[current_language_index]
-                    print(f"Language switched to: {current_language}")
+                    logging.info(f"Language switched to: {current_language}")
                     setup_measuring_screen()
                     plt.draw()
                     continue  # Skip further processing for this loop iteration
 
                 try:
-                    current_distance = float(line.strip())  # Convert the line to a float
+                    # Convert line to float and add to smoothing buffer
+                    current_distance = float(line.strip())
                     distance_buffer.append(current_distance)  # Add to smoothing buffer
                     smoothed_distance = sum(distance_buffer) / len(distance_buffer)  # Smoothed distance
-                    print(f"Raw Distance: {current_distance} mm, Smoothed Distance: {smoothed_distance} mm, in cm {current_distance/10}")
+                    logging.info(f"Raw Distance: {current_distance} mm, Smoothed Distance: {smoothed_distance:.1f} mm")
 
+                    # Initialize `last_distance` for the first iteration
                     if last_distance is None:
                         last_distance = smoothed_distance
                         last_time = current_time
                         continue
 
+                    # Calculate time difference
                     time_diff = max(current_time - last_time, 0.001)
 
-                    # Skip if the time difference is too small (e.g., less than 0.05 seconds)
+                    # Skip if the time difference is too small
                     if time_diff < 0.05:
+                        logging.debug("Skipping: Time difference too small for processing.")
                         continue
 
                     # Calculate distance moved in meters
                     distance_moved_meters = abs(smoothed_distance - last_distance) / 1000  # Convert mm to meters
 
-                    if distance_moved_meters > (DISTANCE_CHANGE_THRESHOLD / 1000):  # Check threshold in meters
-                        # Calculate horsepower based on the distance moved and time
+                    # Check if movement exceeds threshold
+                    if distance_moved_meters > (DISTANCE_CHANGE_THRESHOLD / 1000):
+                        # Calculate horsepower
                         hp = calculate_horsepower(distance_moved_meters, time_diff)
+                        logging.info(f"Distance Moved: {distance_moved_meters:.3f} meters, HP: {hp:.2f}")
 
                         if is_try_active:
-                            # Update the closest distance in this try if current distance is closer to the sensor
+                            # Update closest distance in this try
                             if smoothed_distance < closest_distance_in_try:
                                 closest_distance_in_try = smoothed_distance
 
-                            # Track the maximum horsepower in this try
+                            # Track the maximum horsepower
                             if hp > highest_hp_in_try:
                                 highest_hp_in_try = hp
+                                # logging.info(f"New Highest HP in Try: {highest_hp_in_try:.2f}")
                         else:
                             # Start a new try
                             is_try_active = True
                             try_start_time = current_time
                             closest_distance_in_try = smoothed_distance
                             highest_hp_in_try = hp
+                            # logging.info(f"New Try Started. Initial HP: {hp:.2f}")
 
                         last_hp = hp
                         yield hp
                     else:
+                        # logging.debug("Skipping: Movement below threshold.")
                         if is_try_active:
-                            # End the try and calculate max distance
+                            # End the try
                             is_try_active = False
                             last_try_max_hp = highest_hp_in_try
                             last_try_max_time_diff = current_time - try_start_time if try_start_time else 0
-                            last_try_max_distance = STARTING_DISTANCE - closest_distance_in_try
+                            last_try_max_distance = STARTING_DISTANCE - closest_distance_in_try - INITIAL_STAGE
+                            # logging.info(
+                                # f"Try Ended. Max HP: {last_try_max_hp:.2f}, Max Distance: {last_try_max_distance:.2f} mm, "
+                                # f"Duration: {last_try_max_time_diff:.2f} seconds")
                             try_start_time = None
                             yield 0
                         else:
                             yield 0
                 except ValueError:
+                    logging.error(f"Invalid data received: {line.strip()}")
                     continue
 
+                # Update last_distance and last_time
                 last_distance = smoothed_distance
                 last_time = current_time
 
 
 
-##### PLOTTING ######
+##### DISPLAY ######
 
 def open_full_screen():
     """Display figure in full screen on Linux."""
@@ -357,7 +324,7 @@ def open_full_screen():
     mng = plt.get_current_fig_manager()
 
     if backend == 'TkAgg':
-        print("Using TkAgg backend for full screen on Linux.")
+        print("Using TkAgg backend for full screen on Linux")
         mng.window.attributes('-fullscreen', True)  # TkAgg: Make full screen
     elif backend in ['Qt5Agg', 'QtAgg']:
         print("Using QtAgg backend for full screen on Linux.")
@@ -382,50 +349,68 @@ fig.canvas.manager.toolbar.pack_forget()
 
 def setup_measuring_screen():
     """Initialize the layout for the measuring screen with sections for heading, text, and image."""
-    global img_display, hp_text, ani_measuring  # Make ani_measuring global
+    global img_display, hp_text, ani_measuring
+
+    # Clear the figure and define the layout
     fig.clear()
-    gs = GridSpec(3, 1, height_ratios=[3, 1, 3])  # Define 3 rows with different height ratios
-   
-    # Top section for the heading
+    gs = GridSpec(3, 1, height_ratios=[2.5, 1, 3])  # Adjust height ratios
+
+    # Top section for the main and secondary headlines
     ax1 = fig.add_subplot(gs[0])
-    heading = heading_text[current_language]
-    reshaped_heading = arabic_reshaper.reshape(heading) if current_language in ['arabic', 'hebrew'] else heading
-    bidi_heading = get_display(reshaped_heading) if current_language in ['arabic', 'hebrew'] else reshaped_heading
-    ax1.text(0.5, 0.5, bidi_heading, ha='center', va='center', fontsize=80,
-             fontproperties=fm.FontProperties(fname=font_paths[current_language]),
-             fontweight='bold', color='black')
-    ax1.axis('off')
+    ax1.axis('off')  # Turn off the axis for a clean look
 
+    # Main headline
+    main_heading = heading_text[current_language]
+    reshaped_main = arabic_reshaper.reshape(main_heading) if current_language in ['arabic', 'hebrew'] else main_heading
+    bidi_main = get_display(reshaped_main) if current_language in ['arabic', 'hebrew'] else reshaped_main
+    ax1.text(
+        0.5, 0.7,  # Adjust position (closer to the center of this subplot)
+        bidi_main,
+        ha='center', va='center', fontsize=80,
+        fontproperties=fm.FontProperties(fname=font_paths[current_language]),
+        fontweight='bold', color='black'
+    )
 
-    # Middle section for the text
+    # Secondary headline
+    secondary_heading = secondary_headline_text[current_language]
+    reshaped_secondary = arabic_reshaper.reshape(secondary_heading) if current_language in ['arabic', 'hebrew'] else secondary_heading
+    bidi_secondary = get_display(reshaped_secondary) if current_language in ['arabic', 'hebrew'] else reshaped_secondary
+    ax1.text(
+        0.5, 0.5,  # Slightly below the main headline
+        bidi_secondary,
+        ha='center', va='center', fontsize=40,  # Smaller font size
+        fontproperties=fm.FontProperties(fname=font_paths[current_language]),
+        fontweight='regular', color='gray'
+    )
+
+    # Section for the text
     ax2 = fig.add_subplot(gs[1])
-    hp_text = ax2.text(0.95, 0.95, '', ha='right', va='center', fontsize=30,
-                       fontproperties=fm.FontProperties(fname=font_paths[current_language]),
-                       color='black', fontweight='regular', transform=ax.transAxes, zorder=2,
-                       bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
+    hp_text = ax2.text(
+        0.95, 0.95, '', ha='right', va='center', fontsize=30,
+        fontproperties=fm.FontProperties(fname=font_paths[current_language]),
+        color='black', fontweight='regular', transform=ax2.transAxes, zorder=2,
+        bbox=dict(facecolor='white', alpha=0.8, edgecolor='none')
+    )
     ax2.axis('off')
-
-
-
 
     # Bottom section for the full/empty images
     ax3 = fig.add_subplot(gs[2])
     img_display = ax3.imshow(np.zeros((height, width, 4), dtype=np.uint8))  # Placeholder for empty/full images
     ax3.axis('off')
 
-
+    # Adjust layout
     plt.subplots_adjust(left=0, right=1, top=1, bottom=0, hspace=0, wspace=0)
     plt.tight_layout(pad=0, h_pad=0, w_pad=0)
-
-
     fig.patch.set_visible(False)
 
+    # Create animation, avoid re-creating if already exists
+    if ani_measuring is None:
+        ani_measuring = animation.FuncAnimation(
+            fig, update_measuring_screen, frames=100, interval=200, blit=False
+        )
 
-    # Create animation, keep it persistent to avoid garbage collection
-    if ani_measuring is None:  # Only create the animation if it doesn't already exist
-        ani_measuring = animation.FuncAnimation(fig, update_measuring_screen, frames=100, interval=200, blit=False)
-   
     plt.draw()  # Redraw the figure
+
 
 
 ###### EVENT HANDLING AND DISPLAY UPDATE ######
@@ -437,9 +422,7 @@ def change_language_on_key(event):
    
     if event.key == ' ':
         current_language_index = (current_language_index + 1) % len(languages)
-        current_language = languages[current_language_index]
-        # print(f"Language switched to: {current_language}")
-       
+        current_language = languages[current_language_index]       
         setup_measuring_screen()  # Reload screen with the new language and heading
         plt.draw()  # Redraw the figure
 
@@ -458,7 +441,7 @@ def get_translated_text(language, weight, distance, time, watts, hp):
 def reset_display():
     """Reset display variables and reinitialize the screen layout."""
     global last_hp, last_try_max_hp, last_try_max_distance, last_try_max_time_diff, is_try_active
-    print("Resetting display after 30 seconds")
+    logging.debug("Resetting display after 30 seconds")
     last_hp = 0
     last_try_max_hp = 0
     last_try_max_distance = 0
@@ -488,6 +471,7 @@ def update_measuring_screen(frame):
 
     if hp_data_generator:
         hp = next(hp_data_generator)
+        logging.info(f"Received new horsepower value: {hp:.2f}")
     else:
         hp = 0  # No serial data available, so default to 0 HP
     # hp = next(hp_data_generator)
@@ -510,6 +494,7 @@ def update_measuring_screen(frame):
     # Format current_distance to two decimal places
 
     watts = last_try_max_hp * WATTS_CONSTANT
+    logging.info(f"Max Distance: {current_distance:.2f} cm, Watts: {watts:.2f}, HP: {last_try_max_hp:.2f}")
 
     # Translate Text for Display
     translated_text = get_translated_text(
@@ -538,6 +523,7 @@ def update_measuring_screen(frame):
     # Update Image Based on HP and Redraw
     result_img = blend_images(last_try_max_hp)
     img_display.set_data(np.array(result_img))
+    logging.debug("Image updated based on current horsepower.")
     plt.draw()
 
     return [img_display, hp_text]
@@ -547,11 +533,22 @@ def update_measuring_screen(frame):
 ###### SETUP EXIT HANDLERS AND LOGGING ######
 
 def close_on_esc(event):
-    """Close the application when the ESC key is pressed."""
+    """Exit fullscreen mode when the ESC key is pressed."""
     if event.key == 'escape':  # Check if the ESC key is pressed
-        close_serial_connection()  # Close the serial connection
-        plt.close('all')  # Close all matplotlib figures
-        sys.exit(0)  # Exit the program
+        backend = plt.get_backend()
+        mng = plt.get_current_fig_manager()
+
+        if backend == 'TkAgg':
+            # Exit fullscreen for TkAgg backend
+            mng.window.attributes('-fullscreen', False)
+            print("Exited fullscreen mode.")
+        elif backend in ['Qt5Agg', 'QtAgg']:
+            # Exit fullscreen for Qt-based backends
+            mng.window.showNormal()
+            logging.debug("Exited fullscreen mode.")
+        else:
+            print(f"Exiting fullscreen not supported for backend: {backend}")
+
 
 # Connect the function to the key press event
 fig.canvas.mpl_connect('key_press_event', close_on_esc)
@@ -560,7 +557,7 @@ fig.canvas.mpl_connect('key_press_event', close_on_esc)
 def close_serial_connection():
     if serial_connection and serial_connection.is_open:
         serial_connection.close()
-    print("Serial connection closed.")
+    logging.info("Serial connection closed.")
 
 # Register the close_serial_connection function to run on exit
 atexit.register(close_serial_connection)
@@ -573,24 +570,31 @@ def on_close(event):
 # Connect the close event handler to the figure
 fig.canvas.mpl_connect('close_event', on_close)
 
+
 # Configure logging
 logging.basicConfig(
-    filename="error_log.txt",  # File to save error log
-    level=logging.ERROR,       # Log level set to capture errors
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    filename="/home/mada/Desktop/HorsePower.log",  # Name of the log file
+    level=logging.DEBUG,      # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    format="%(asctime)s - %(levelname)s - %(message)s"  # Log message format
 )
 
-def log_exception(exc_type, exc_value, exc_traceback):
-    """Log uncaught exceptions."""
-    if issubclass(exc_type, KeyboardInterrupt):
-        # Skip logging for keyboard interrupts
-        sys.__excepthook__(exc_type, exc_value, exc_traceback)
-        return
-    # Log the exception with traceback
-    logging.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+# Redirect print statements to logging
+class LoggerWriter:
+    def __init__(self, level):
+        self.level = level
 
-# Set the custom exception hook
-sys.excepthook = log_exception
+    def write(self, message):
+        if message.strip():  # Ignore empty lines
+            self.level(message.strip())
+
+    def flush(self):  # Needed for Python logging compatibility
+        pass
+
+
+# Redirect stdout and stderr to logging
+sys.stdout = LoggerWriter(logging.info)  # Redirect standard output to INFO log level
+sys.stderr = LoggerWriter(logging.error) 
+logging.info("This is a test message.")
 
 
 ###### MAIN FUNCTION ######
@@ -613,4 +617,7 @@ def main():
 if __name__ == "__main__":
     main()
     print(matplotlib.get_backend())
+    logging.shutdown()
+
+
 
